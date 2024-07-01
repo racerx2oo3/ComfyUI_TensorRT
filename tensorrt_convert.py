@@ -130,6 +130,17 @@ class TRT_MODEL_CONVERSION_BASE:
         with open(self.timing_cache_path, "wb") as timing_cache_file:
             timing_cache_file.write(memoryview(timing_cache.serialize()))
 
+    def _is_quantized(self, model):
+        try:
+            from modelopt.torch.quantization.nn.modules.tensor_quantizer import TensorQuantizer
+        except:
+            return False
+        
+        for mod in model.modules():
+            if mod.__class__ == TensorQuantizer:
+                return True
+        return False
+
     def _convert(
         self,
         model,
@@ -154,9 +165,10 @@ class TRT_MODEL_CONVERSION_BASE:
                 os.path.join(self.temp_dir, "{}".format(time.time())), "model.onnx"
             )
         )
-
-        comfy.model_management.unload_all_models()
-        comfy.model_management.load_models_gpu([model], force_patch_weights=True)
+        self.is_quantized = self._is_quantized(model.model.diffusion_model)
+        if not self.is_quantized:
+            comfy.model_management.unload_all_models()
+            comfy.model_management.load_models_gpu([model], force_patch_weights=True)
         unet = model.model.diffusion_model
 
         context_dim = model.model.model_config.unet_config.get("context_dim", None)
@@ -309,6 +321,8 @@ class TRT_MODEL_CONVERSION_BASE:
                 input_names[k], encode(min_shape), encode(opt_shape), encode(max_shape)
             )
 
+        if self.is_quantized:
+            config.set_flag(trt.BuilderFlag.INT8)
         config.set_flag(trt.BuilderFlag.FP16)
         config.add_optimization_profile(profile)
 
