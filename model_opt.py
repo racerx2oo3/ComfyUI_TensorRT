@@ -17,7 +17,7 @@ import modelopt.torch.quantization as mtq
 import modelopt.torch.quantization.nn as mnn
 from modelopt.torch.quantization.nn import QuantModuleRegistry
 
-from calib.plugin_calib import PercentileCalibrator
+from .mo_utils.plugin_calib import PercentileCalibrator
 
 MAX_RESOLUTION = 16384
 
@@ -33,6 +33,8 @@ else:
         {".pt"},
     )
 
+if not os.path.exists(folder_paths.folder_names_and_paths["modelopt"][0][0]):
+    os.makedirs(folder_paths.folder_names_and_paths["modelopt"][0][0])
 
 def filter_func(name):
     pattern = re.compile(
@@ -177,6 +179,8 @@ def generate_fp8_scales(unet):
 
 
 def load_calib_prompts(batch_size, calib_data_path="./calib_prompts.txt"):
+    if not os.path.exists(calib_data_path):
+        raise FileNotFoundError
     with open(calib_data_path, "r", encoding="utf8") as file:
         lst = [line.rstrip("\n") for line in file]
     return [lst[i : i + batch_size] for i in range(0, len(lst), batch_size)]
@@ -288,7 +292,7 @@ class ModelOptQuantizer:
                 "model": ("MODEL",),
                 "clip": ("CLIP",),
                 "format": (["int8"],),
-                "calib_prompts": ("STRING", {"default": "calib/calib_prompts.txt"}),
+                "calib_prompts_path": ("STRING", {"default": "default"}),
                 "width": (
                     "INT",
                     {"default": 512, "min": 16, "max": MAX_RESOLUTION, "step": 8},
@@ -327,8 +331,9 @@ class ModelOptQuantizer:
                 "calib_size": ("INT", {"default": 128, "min": 1, "max": 10000}),
                 "collect_method": (
                     ["min-mean", "min-max" "mean-max", "global_min", "default"],
+                    {"default": "min-mean"},
                 ),
-                "quant_level": ([3.0, 2.5, 2.0, 1.0],),
+                "quant_level": ([3.0, 2.5, 2.0, 1.0], {"default": 2.5}),
             }
         }
 
@@ -343,7 +348,7 @@ class ModelOptQuantizer:
         model,
         clip,
         format,
-        calib_prompts,
+        calib_prompts_path,
         width,
         height,
         batch_size,
@@ -365,10 +370,13 @@ class ModelOptQuantizer:
         device = comfy.model_management.get_torch_device()
 
         # This is a list of prompts
-        cali_prompts = load_calib_prompts(
-            batch_size,
-            os.path.join(os.path.dirname(os.path.realpath(__file__)), calib_prompts),
-        )
+        if calib_prompts_path == "default":
+            calib_prompts_path = os.path.join(
+                os.path.dirname(os.path.realpath(__file__)),
+                "mo_utils/calib_prompts.txt",
+            )
+
+        calib_prompts = load_calib_prompts(batch_size, calib_prompts_path)
         calib_size = calib_size // batch_size
         quant_level = float(quant_level)
 
@@ -419,7 +427,7 @@ class ModelOptQuantizer:
             pipe.model.model.diffusion_model = unet
             do_calibrate(
                 pipe=pipe,
-                calibration_prompts=cali_prompts,
+                calibration_prompts=calib_prompts,
                 calib_size=calib_size,
                 n_steps=steps,
             )
@@ -444,7 +452,7 @@ class ModelOptLoader:
             "required": {
                 "model": ("MODEL",),
                 "quantized_ckpt": (folder_paths.get_filename_list("modelopt"),),
-                "quant_level": ([3.0, 2.5, 2.0, 1.0],),
+                "quant_level": ([3.0, 2.5, 2.0, 1.0], {"default": 2.5}),
             }
         }
 
@@ -475,6 +483,6 @@ class ModelOptLoader:
 
 
 NODE_CLASS_MAPPINGS = {
-    "ModelOpt Quantizer": ModelOptQuantizer,
-    "ModelOpt Loader": ModelOptLoader,
+    "ModelOptQuantizer": ModelOptQuantizer,
+    "ModelOptLoader": ModelOptLoader,
 }

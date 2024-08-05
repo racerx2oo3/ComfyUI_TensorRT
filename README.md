@@ -107,6 +107,22 @@ TensorRT Engines are loaded using the TensorRT Loader node.
 
 ![](readme_images/image1.png)
 
+## TensorRT ModelOptimizer
+The [NVIDIA TensorRT Model Optimizer](https://github.com/NVIDIA/TensorRT-Model-Optimizer) (referred to as *Model Optimizer*, or *ModelOpt*) is a library comprising state-of-the-art model optimization techniques including quantization and sparsity to compress models.
+Using the ModelOpt nodes you can use Model Optimizer to calibrate and quantize the backbone part of diffusion models which takes up most of the end-to-latency aswell as VRAM.
+
+You can find different workflows in the [workflows](workflows) folder of this repo.
+These .json files can be loaded in ComfyUI.
+
+### Quantizing a model
+
+This step is resource intense and can take a long time depeinding on your GPU. You can download pre-quantied INT8 checkpoints from [here](TODO) for SD 1.5 and XL.
+
+For detailed information on all available parameters, please visit the [diffusers example](https://github.com/NVIDIA/TensorRT-Model-Optimizer/tree/main/diffusers/quantization).
+
+### Exporting a quantized model
+
+
 ## Common Issues/Limitations
 
 ComfyUI TensorRT engines are not yet compatible with ControlNets or

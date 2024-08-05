@@ -15,8 +15,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DYNAMIC_TRT_MODEL_CONVERSION": "DYNAMIC TRT_MODEL CONVERSION",
     "STATIC TRT_MODEL CONVERSION": STATIC_TRT_MODEL_CONVERSION,
     "TensorRTLoader": "TensorRT Loader",
-    "ModelOptQuantizer": ModelOptQuantizer,
-    "ModelOptLoader": ModelOptLoader,
+    "ModelOpt Quantizer": ModelOptQuantizer,
+    "ModelOpt Loader": ModelOptLoader,
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
