@@ -1,3 +1,4 @@
 tensorrt>=10.0.1
 onnx
 nvidia-modelopt~=0.15.0
+onnx!=1.16.2
