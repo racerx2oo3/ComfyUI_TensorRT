@@ -1,22 +1,13 @@
-from .tensorrt_convert import DYNAMIC_TRT_MODEL_CONVERSION, STATIC_TRT_MODEL_CONVERSION
-from .model_opt import ModelOptQuantizer, ModelOptLoader
-from .tensorrt_loader import TrTUnet, TensorRTLoader
+from .tensorrt_convert import NODE_CLASS_MAPPINGS as CONVERT_CLASS_MAP
+from .tensorrt_convert import NODE_DISPLAY_NAME_MAPPINGS as CONVERT_NAME_MAP
 
-NODE_CLASS_MAPPINGS = {
-    "DYNAMIC_TRT_MODEL_CONVERSION": DYNAMIC_TRT_MODEL_CONVERSION,
-    "STATIC_TRT_MODEL_CONVERSION": STATIC_TRT_MODEL_CONVERSION,
-    "TensorRTLoader": TensorRTLoader,
-    "ModelOptQuantizer": ModelOptQuantizer,
-    "ModelOptLoader": ModelOptLoader,
-}
+from .tensorrt_loader import NODE_CLASS_MAPPINGS as LOADER_CLASS_MAP
+from .tensorrt_loader import NODE_DISPLAY_NAME_MAPPINGS as LOADER_NAME_MAP
 
+from .onnx_nodes import NODE_CLASS_MAPPING as ONNX_CLASS_MAP
+from .onnx_nodes import NODE_DISPLAY_NAME_MAPPINGS as ONNX_NAME_MAP
 
-NODE_DISPLAY_NAME_MAPPINGS = {
-    "DYNAMIC_TRT_MODEL_CONVERSION": "DYNAMIC TRT_MODEL CONVERSION",
-    "STATIC TRT_MODEL CONVERSION": STATIC_TRT_MODEL_CONVERSION,
-    "TensorRTLoader": "TensorRT Loader",
-    "ModelOpt Quantizer": ModelOptQuantizer,
-    "ModelOpt Loader": ModelOptLoader,
-}
+NODE_CLASS_MAPPINGS = CONVERT_CLASS_MAP | LOADER_CLASS_MAP | ONNX_CLASS_MAP
+NODE_DISPLAY_NAME_MAPPINGS = CONVERT_NAME_MAP | LOADER_NAME_MAP | ONNX_NAME_MAP
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
