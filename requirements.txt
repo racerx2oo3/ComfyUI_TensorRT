@@ -1,4 +1,7 @@
 tensorrt>=10.0.1
 onnx
-nvidia-modelopt~=0.15.0
+nvidia-modelopt~=0.17.0
 onnx!=1.16.2
+onnx-graphsurgeon
+onnxmltools
+onnxconverter-common

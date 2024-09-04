@@ -121,6 +121,23 @@ This step is resource intense and can take a long time depeinding on your GPU. Y
 
 For detailed information on all available parameters, please visit the [diffusers example](https://github.com/NVIDIA/TensorRT-Model-Optimizer/tree/main/diffusers/quantization).
 
+#### Important Parameters
+
+- `percentile`: Control quantization scaling factors (amax) collecting range, meaning that we will collect the chosen amax in the range of `(n_steps * percentile)` steps. Recommendation: 1.0
+
+- `alpha`: A parameter in SmoothQuant, used for linear layers only. Recommendation: 0.8 for SDXL, 1.0 for SD 1.5
+
+- `quant-level`: Which layers to be quantized, 1: `CNNs`, 2: `CNN + FFN`, 2.5: `CNN + FFN + QKV`, 3: `CNN + Almost all Linear (Including FFN, QKV, Proj and others)`, 4: `CNN + Almost all Linear + fMHA`. Recommendation: 2, 2.5 and 3, 4 is only for FP8, depending on the requirements for image quality & speedup. **You might notice a slight difference between FP8 quant level 3.0 and 4.0, as we are currently working to enhance the performance of FP8 fMHA.**
+
+- `calib-size`: For SDXL INT8, we recommend 32 or 64, for SDXL FP8, 128 is recommended. For SD 1.5, set it to 512 or 1024.
+
+- `n_steps`: Recommendation: SD/SDXL 20 or 30, SDXL-Turbo 4.
+
+**Then, we can load the generated checkpoint and export the INT8/FP8 quantized model in the next step.**
+
+**For FP8, we only support the TRT deployment on Ada/Hopper GPUs**
+
+
 ### Exporting a quantized model
 
 

@@ -1,10 +1,23 @@
-import onnx
 import torch
 from enum import Enum
-import comfy
-import os
 from typing import List
+import os
+from pathlib import Path
+
+import onnx
 from onnx.external_data_helper import _get_all_tensors, ExternalDataInfo
+from onnxmltools.utils.float16_converter import convert_float_to_float16
+import onnx_graphsurgeon as gs
+
+import comfy
+
+from ..mo_utils.attention_plugin import attn_cls
+from .fp8_onnx_graphsurgeon import (
+    cast_fp8_mha_io,
+    cast_resize_io,
+    convert_fp16_io,
+    convert_zp_fp8,
+)
 
 
 def _get_onnx_external_data_tensors(model: onnx.ModelProto) -> List[str]:
@@ -44,7 +57,7 @@ class ModelType(Enum):
         elif isinstance(model.model, comfy.model_base.AuraFlow):
             return cls.AuraFlow
         elif isinstance(model.model, comfy.model_base.Flux):
-            if model.unet_config.guidance_embed:
+            if model.model.model_config.unet_config["guidance_embed"]:
                 return cls.FLUX_DEV
             else:
                 return cls.FLUX_SCHNELL
@@ -74,12 +87,11 @@ class ModelType(Enum):
     @classmethod
     def list_mo_support(cls):
         return [
-            cls.SD1x,
-            cls.SD2x768v,
-            cls.SDXL_BASE,
-            cls.SDXL_REFINER,
-            cls.SD3,
-            cls.FLUX_DEV,
+            cls.SD1x.value,
+            cls.SD2x768v.value,
+            cls.SDXL_BASE.value,
+            cls.SD3.value,
+            cls.FLUX_DEV.value,
         ]
 
 
@@ -112,13 +124,16 @@ def get_shape(
     context_multiplier: int = 1,
     num_video_frames: int = 12,
     y_dim: int = None,
-    extra_input: dict = {}, # TODO batch_size*=2?
+    extra_input: dict = {},  # TODO batch_size*=2?
 ):
     context_len = 77
     context_dim = model.model.model_config.unet_config.get("context_dim", None)
-    if model_type in (ModelType.AuraFlow, ModelType.FLUX_DEV, ModelType.FLUX_SCHNELL):
+    if model_type == ModelType.AuraFlow:
         context_len = 256
         context_dim = 2048
+    elif model_type in (ModelType.FLUX_DEV, ModelType.FLUX_SCHNELL):
+        context_len = 256
+        context_dim = model.model.model_config.unet_config.get("context_in_dim", None)
     elif model_type == ModelType.SD3:
         context_embedder_config = model.model.model_config.unet_config.get(
             "context_embedder_config", None
@@ -229,6 +244,53 @@ def get_io_names_onnx(model: onnx.ModelProto):
     return input_names, None, None
 
 
+def flux_convert_rope_weight_type(onnx_graph):
+    graph = gs.import_onnx(onnx_graph)
+    for node in graph.nodes:
+        if node.op == "Einsum":
+            node.inputs[1].dtype == "float32"
+            print(node.name)
+    return gs.export_onnx(graph)
+
+
+def generate_fp8_scales(backbone):
+    # temporary solution due to a known bug in torch.onnx._dynamo_export
+    for _, module in backbone.named_modules():
+        if isinstance(module, (torch.nn.Linear, torch.nn.Conv2d)) and (
+            hasattr(module.input_quantizer, "_amax")
+            and module.input_quantizer is not None
+        ):
+            module.input_quantizer._num_bits = 8
+            module.weight_quantizer._num_bits = 8
+            module.input_quantizer._amax = module.input_quantizer._amax * (127 / 448.0)
+            module.weight_quantizer._amax = module.weight_quantizer._amax * (
+                127 / 448.0
+            )
+        elif isinstance(module, attn_cls) and (
+            hasattr(module.q_bmm_quantizer, "_amax")
+            and module.q_bmm_quantizer is not None
+        ):
+            module.q_bmm_quantizer._num_bits = 8
+            module.q_bmm_quantizer._amax = module.q_bmm_quantizer._amax * (127 / 448.0)
+            module.k_bmm_quantizer._num_bits = 8
+            module.k_bmm_quantizer._amax = module.k_bmm_quantizer._amax * (127 / 448.0)
+            module.v_bmm_quantizer._num_bits = 8
+            module.v_bmm_quantizer._amax = module.v_bmm_quantizer._amax * (127 / 448.0)
+            module.softmax_quantizer._num_bits = 8
+            module.softmax_quantizer._amax = module.softmax_quantizer._amax * (
+                127 / 448.0
+            )
+
+
+def flux_convert_rope_weight_type(onnx_graph):
+    graph = gs.import_onnx(onnx_graph)
+    for node in graph.nodes:
+        if node.op == "Einsum":
+            node.inputs[1].dtype == "float32"
+            print(node.name)
+    return gs.export_onnx(graph)
+
+
 def export_onnx(
     model,
     path,
@@ -237,6 +299,7 @@ def export_onnx(
     width: int = 512,
     num_video_frames: int = 12,
     context_multiplier: int = 1,
+    fp8: bool = False,
 ):
     model_type = ModelType.detect_version(model)
     if model_type == ModelType.UNKNOWN:
@@ -267,7 +330,7 @@ def export_onnx(
         verbose=False,
         input_names=input_names,
         output_names=output_names,
-        opset_version=19,
+        opset_version=17,
         dynamic_axes=dynamic_axes,
     )
 
@@ -284,6 +347,36 @@ def export_onnx(
     for tensor in tensors_paths:
         os.remove(os.path.join(dir, tensor))
 
+    onnx.save(
+        onnx_model,
+        path,
+        save_as_external_data=True,
+        all_tensors_to_one_file=True,
+        location=name + "_data",
+        size_threshold=1024,
+    )
+
+    if not fp8:
+        return
+
+    onnx_model = onnx.load(path, load_external_data=True)
+    # Iterate over all files in the folder and delete them
+    output_folder = Path(dir)
+    for file in output_folder.iterdir():
+        if file.is_file():
+            file.unlink()
+    onnx_model = convert_zp_fp8(onnx_model)
+    if model_type != ModelType.FLUX_DEV:
+        onnx_model = convert_float_to_float16(
+            onnx_model, keep_io_types=True, disable_shape_infer=True
+        )
+        graph = gs.import_onnx(onnx_model)
+        cast_resize_io(graph)
+        convert_fp16_io(graph)
+        cast_fp8_mha_io(graph)
+        onnx_model = gs.export_onnx(graph)
+    else:
+        flux_convert_rope_weight_type(onnx_model)
     onnx.save(
         onnx_model,
         path,
