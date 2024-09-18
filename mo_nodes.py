@@ -89,8 +89,12 @@ DEFAULT_CONFIGS = {
         "fp8": MOConfig(1024, 1024, 42, 30, 7.5, "euler", "normal", 1.0, 1.0, 0.8, 128, "default", 3),            
     },
     ModelType.FLUX_DEV.value: {
-        "int8": MOConfig(1024, 1024, 42, 30, 7.5, "euler", "normal", 1.0, 1.0, 0.8, 64, "default", 2.5),
-        "fp8": MOConfig(1024, 1024, 42, 30, 7.5, "euler", "normal", 1.0, 1.0, 0.8, 128, "default", 3),       
+        "int8": MOConfig(1024, 1024, 42, 30, 3.5, "euler", "normal", 1.0, 1.0, 0.8, 64, "default", 2.5),
+        "fp8": MOConfig(1024, 1024, 42, 30, 3.5, "euler", "normal", 1.0, 1.0, 0.8, 128, "default", 3),       
+    },
+    ModelType.FLUX_SCHNELL.value: {
+        "int8": MOConfig(1024, 1024, 42, 4, 3.5, "euler", "normal", 1.0, 1.0, 0.8, 64, "default", 2.5),
+        "fp8": MOConfig(1024, 1024, 42, 4, 3.5, "euler", "normal", 1.0, 1.0, 0.8, 128, "default", 3),       
     }
 }
 
@@ -176,7 +180,7 @@ class BaseQuantizer:
             else:
                 raise NotImplementedError
 
-        if model_type == ModelType.FLUX_DEV:
+        if model_type in (ModelType.FLUX_DEV, ModelType.FLUX_SCHNELL):
             pipe = FluxDiffusionPipe(
                 model,
                 clip,
@@ -215,7 +219,7 @@ class BaseQuantizer:
                 n_steps=steps,
             )
 
-        if model_type == ModelType.FLUX_DEV:
+        if model_type in (ModelType.FLUX_DEV, ModelType.FLUX_SCHNELL):
             set_stronglytyped_precision(quant_config, "BFloat16")
 
         register_quant_modules()

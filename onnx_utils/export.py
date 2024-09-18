@@ -366,7 +366,7 @@ def export_onnx(
         if file.is_file():
             file.unlink()
     onnx_model = convert_zp_fp8(onnx_model)
-    if model_type != ModelType.FLUX_DEV:
+    if model_type not in (ModelType.FLUX_DEV, ModelType.FLUX_SCHNELL):
         onnx_model = convert_float_to_float16(
             onnx_model, keep_io_types=True, disable_shape_infer=True
         )
