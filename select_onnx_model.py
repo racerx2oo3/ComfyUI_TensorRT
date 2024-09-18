@@ -5,6 +5,8 @@ class ONNXModelSelector:
     @classmethod
     def INPUT_TYPES(s):
         onnx_path = os.path.join(folder_paths.models_dir,'onnx')
+        if not os.path.exists(onnx_path):
+            os.makedirs(onnx_path)
         onnx_models = [f for f in os.listdir(onnx_path) if f.endswith('.onnx')]
         return {
             "required": {
