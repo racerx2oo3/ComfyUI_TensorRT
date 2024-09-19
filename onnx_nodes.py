@@ -1,7 +1,7 @@
 import os
 from .onnx_utils.export import export_onnx
-
 import comfy
+import folder_paths
 
 
 class ONNX_EXPORT:
@@ -16,9 +16,16 @@ class ONNX_EXPORT:
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "required": {"model": ("MODEL",), "output_folder": ("STRING",)},
+            "required": {
+                "model": ("MODEL",),
+                "output_folder": (
+                    "STRING",
+                    {"default": os.path.join(folder_paths.models_dir, "onnx")},
+                ),
+            },
             "optional": {"filename": ("STRING", {"default": "model.onnx"})},
         }
+
 
     def export(self, model, output_folder, filename):
         comfy.model_management.unload_all_models()
@@ -44,8 +51,14 @@ class ONNX_FP8_EXPORT:
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "required": {"model": ("MODEL",), "output_folder": ("STRING",)},
-            "optional": {"filename": ("STRING", {"default": "model.onnx"})},
+            "required": {
+                "model": ("MODEL",),
+                "output_folder": (
+                    "STRING",
+                    {"default": os.path.join(folder_paths.models_dir, "onnx")},
+                ),
+            },
+            "optional": {"filename": ("STRING", {"default": "model_fp8.onnx"})},
         }
 
     def export(self, model, output_folder, filename):
@@ -60,12 +73,38 @@ class ONNX_FP8_EXPORT:
         return ()
 
 
+class ONNXModelSelector:
+    @classmethod
+    def INPUT_TYPES(s):
+        onnx_path = os.path.join(folder_paths.models_dir, "onnx")
+        if not os.path.exists(onnx_path):
+            os.makedirs(onnx_path)
+        onnx_models = [f for f in os.listdir(onnx_path) if f.endswith(".onnx")]
+        return {
+            "required": {
+                "model_name": (onnx_models,),
+            },
+        }
+
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("model_path", "model_name")
+    FUNCTION = "select_onnx_model"
+    CATEGORY = "TensorRT"
+
+    def select_onnx_model(self, model_name):
+        onnx_path = os.path.join(folder_paths.models_dir, "onnx")
+        model_path = os.path.join(onnx_path, model_name)
+        return (model_path, model_name)
+
+
 NODE_CLASS_MAPPING = {
     "ONNX_EXPORT": ONNX_EXPORT,
     "ONNX_FP8_EXPORT": ONNX_FP8_EXPORT,
+    "ONNXModelSelector": ONNXModelSelector,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ONNX_EXPORT": "ONNX Export",
     "ONNX_FP8_EXPORT": "ONNX FP8 Export",
+    "ONNXModelSelector": "Select ONNX Model",
 }

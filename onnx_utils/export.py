@@ -18,6 +18,8 @@ from .fp8_onnx_graphsurgeon import (
     convert_fp16_io,
     convert_zp_fp8,
 )
+import folder_paths
+import time
 
 
 def _get_onnx_external_data_tensors(model: onnx.ModelProto) -> List[str]:
@@ -323,10 +325,19 @@ def export_onnx(
     inputs = get_sample_input(input_shapes, dtype, device)
     backbone = get_backbone(model, model_type, input_names, num_video_frames)
 
+    dir, name = os.path.split(path)
+    temp_path = os.path.join(folder_paths.get_temp_directory(), "{}".format(time.time()))
+    onnx_temp = os.path.normpath(
+        os.path.join(temp_path, name)
+    )
+
+    if not os.path.exists(temp_path):
+        os.makedirs(temp_path)
+
     torch.onnx.export(
         backbone,
         inputs,
-        path,
+        onnx_temp,
         verbose=False,
         input_names=input_names,
         output_names=output_names,
@@ -336,16 +347,13 @@ def export_onnx(
 
     comfy.model_management.unload_all_models()
     comfy.model_management.soft_empty_cache()
-    dir, name = os.path.split(path)
-    onnx_model = onnx.load(path, load_external_data=False)
+
+    onnx_model = onnx.load(onnx_temp, load_external_data=True)
     tensors_paths = _get_onnx_external_data_tensors(onnx_model)
 
-    if not tensors_paths and not fp8:
-        return
-
-    onnx_model = onnx.load(path, load_external_data=True)
-    for tensor in tensors_paths:
-        os.remove(os.path.join(dir, tensor))
+    if tensors_paths:
+        for tensor in tensors_paths:
+            os.remove(os.path.join(onnx_temp, tensor))
 
     if fp8:
         onnx_model = convert_zp_fp8(onnx_model)
