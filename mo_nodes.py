@@ -148,9 +148,6 @@ class BaseQuantizer:
 
         if quant_level == 4.0:
             assert format != "int8", "We only support fp8 for Level 4 Quantization"
-            assert (
-                model_type == ModelType.SDXL_BASE
-            ), "We only support fp8 for SDXL on Level 4"
 
         extra_step = (
             1 if model_type == ModelType.SD1x or model_type == ModelType.SD2x768v else 0

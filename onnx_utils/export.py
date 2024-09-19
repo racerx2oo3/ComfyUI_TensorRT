@@ -340,43 +340,27 @@ def export_onnx(
     onnx_model = onnx.load(path, load_external_data=False)
     tensors_paths = _get_onnx_external_data_tensors(onnx_model)
 
-    if not tensors_paths:
+    if not tensors_paths and not fp8:
         return
 
     onnx_model = onnx.load(path, load_external_data=True)
     for tensor in tensors_paths:
         os.remove(os.path.join(dir, tensor))
 
-    onnx.save(
-        onnx_model,
-        path,
-        save_as_external_data=True,
-        all_tensors_to_one_file=True,
-        location=name + "_data",
-        size_threshold=1024,
-    )
+    if fp8:
+        onnx_model = convert_zp_fp8(onnx_model)
+        if model_type not in (ModelType.FLUX_DEV, ModelType.FLUX_SCHNELL):
+            onnx_model = convert_float_to_float16(
+                onnx_model, keep_io_types=True, disable_shape_infer=True
+            )
+            graph = gs.import_onnx(onnx_model)
+            cast_resize_io(graph)
+            convert_fp16_io(graph)
+            cast_fp8_mha_io(graph)
+            onnx_model = gs.export_onnx(graph)
+        else:
+            flux_convert_rope_weight_type(onnx_model)
 
-    if not fp8:
-        return
-
-    onnx_model = onnx.load(path, load_external_data=True)
-    # Iterate over all files in the folder and delete them
-    output_folder = Path(dir)
-    for file in output_folder.iterdir():
-        if file.is_file():
-            file.unlink()
-    onnx_model = convert_zp_fp8(onnx_model)
-    if model_type not in (ModelType.FLUX_DEV, ModelType.FLUX_SCHNELL):
-        onnx_model = convert_float_to_float16(
-            onnx_model, keep_io_types=True, disable_shape_infer=True
-        )
-        graph = gs.import_onnx(onnx_model)
-        cast_resize_io(graph)
-        convert_fp16_io(graph)
-        cast_fp8_mha_io(graph)
-        onnx_model = gs.export_onnx(graph)
-    else:
-        flux_convert_rope_weight_type(onnx_model)
     onnx.save(
         onnx_model,
         path,
